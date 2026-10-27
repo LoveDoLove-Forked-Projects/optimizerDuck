@@ -145,8 +145,10 @@ public sealed class ProcessRunner
                 );
                 try
                 {
-                    process.WaitForExit(GraceDrainMs);
+                    using var graceCts = new CancellationTokenSource(GraceDrainMs);
+                    await process.WaitForExitAsync(graceCts.Token).ConfigureAwait(false);
                 }
+                catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     _logger?.LogError(
@@ -165,11 +167,15 @@ public sealed class ProcessRunner
                     TryKill(process, pid, "force kill");
                     try
                     {
-                        if (!process.WaitForExit(ForceKillWaitMs))
-                            _logger?.LogWarning(
-                                "Process did not exit after force kill: PID {ProcessId}. User may need manual cleanup.",
-                                pid
-                            );
+                        using var forceCts = new CancellationTokenSource(ForceKillWaitMs);
+                        await process.WaitForExitAsync(forceCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger?.LogWarning(
+                            "Process did not exit after force kill: PID {ProcessId}. User may need manual cleanup.",
+                            pid
+                        );
                     }
                     catch (Exception ex)
                     {

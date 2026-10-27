@@ -405,12 +405,13 @@ public partial class App : Application
             mainWindow.Show();
         });
 
-        _logger.LogInformation("Preloading optimizations...");
-        await optimizationRegistry.PreloadOptimizationsAsync().ConfigureAwait(false);
-
-        _logger.LogInformation("Preloading customize settings...");
+        _logger.LogInformation("Preloading optimizations and customize settings...");
         var customizeRegistry = _host.Services.GetRequiredService<CustomizeRegistry>();
-        await customizeRegistry.PreloadCategoriesAsync().ConfigureAwait(false);
+        await Task.WhenAll(
+                optimizationRegistry.PreloadOptimizationsAsync(),
+                customizeRegistry.PreloadCategoriesAsync()
+            )
+            .ConfigureAwait(false);
 
         RevertManager.RemoveOrphanedTempFiles(_logger);
     }

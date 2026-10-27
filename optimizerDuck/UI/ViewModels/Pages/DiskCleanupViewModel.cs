@@ -97,11 +97,12 @@ public partial class DiskCleanupViewModel(
     {
         await base.OnNavigatedToAsync();
 
-        await ScanAsync();
+        if (!IsAllScanned && !IsScanning)
+        {
+            await ScanAsync();
+        }
 
-        CleanupItems = new ObservableCollection<CleanupItem>(
-            CleanupItems.OrderByDescending(i => i.SizeBytes).ToArray()
-        );
+        ApplySort();
 
         foreach (var item in CleanupItems)
             if (item.SizeBytes == 0)

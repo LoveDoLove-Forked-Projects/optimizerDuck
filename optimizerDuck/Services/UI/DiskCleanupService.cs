@@ -143,7 +143,19 @@ public class DiskCleanupService(ILogger<DiskCleanupService> logger)
     /// <param name="items">The items to scan.</param>
     public async Task ScanAllAsync(IEnumerable<CleanupItem> items)
     {
-        await Task.WhenAll(items.Select(ScanAsync));
+        await Parallel
+            .ForEachAsync(
+                items,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 2, 6),
+                },
+                async (item, _) =>
+                {
+                    await ScanAsync(item);
+                }
+            )
+            .ConfigureAwait(false);
     }
 
     /// <summary>

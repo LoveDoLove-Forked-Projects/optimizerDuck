@@ -88,6 +88,19 @@ public class OperationRunner(
                 ? null
                 : applyResult.ErrorMessage;
         }
+        catch (OperationCanceledException ocex)
+        {
+            _logger.LogInformation("Operation {Name} was cancelled", request.Subject.LogName);
+            return new OptimizationResult
+            {
+                Status = changes.ModifiedSystem
+                    ? OptimizationSuccessResult.PartialSuccess
+                    : OptimizationSuccessResult.Failed,
+                Message = Loc.Instance["Common.OperationCancelled"],
+                Exception = ocex,
+                FailedSteps = changes.FailedSteps.OrderBy(s => s.Index).ToList(),
+            };
+        }
         catch (Exception ex)
         {
             exception = ex;

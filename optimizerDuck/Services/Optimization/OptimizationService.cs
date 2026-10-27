@@ -288,27 +288,38 @@ public class OptimizationService(
         // Applied state comes from the presence of revert data, not from a database, and a
         // file that cannot be read still counts as data, so an item is never offered for a
         // fresh apply while an old payload is still sitting next to it.
-        foreach (var opt in optimizations)
-        {
-            var applied = await RevertManager.IsAppliedAsync(opt.Id).ConfigureAwait(false);
-            opt.State.IsApplied = applied;
-            opt.State.AppliedAt = applied
-                ? (await RevertManager.GetRevertDataAsync(opt.Id).ConfigureAwait(false))?.AppliedAt
-                : null;
+        await Parallel
+            .ForEachAsync(
+                optimizations,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 2, 8),
+                },
+                async (opt, _) =>
+                {
+                    var applied = await RevertManager.IsAppliedAsync(opt.Id).ConfigureAwait(false);
+                    opt.State.IsApplied = applied;
+                    opt.State.AppliedAt = applied
+                        ? (
+                            await RevertManager.GetRevertDataAsync(opt.Id).ConfigureAwait(false)
+                        )?.AppliedAt
+                        : null;
 
-            // The record outlives the revert file, so it is read separately and never gates the
-            // applied mark.
-            var record = ChangeRecordStore.TryRead(opt.Id);
-            opt.State.AppliedSummary = record is null
-                ? string.Empty
-                : Loc.Instance[
-                    "Optimizer.UI.State.Applied.Summary",
-                    record.ChangedCount,
-                    record.CountOf(ChangeKind.Skip),
-                    record.CountOf(ChangeKind.NotApplicable),
-                    record.CountOf(ChangeKind.Refused)
-                ];
-        }
+                    // The record outlives the revert file, so it is read separately and never gates the
+                    // applied mark.
+                    var record = ChangeRecordStore.TryRead(opt.Id);
+                    opt.State.AppliedSummary = record is null
+                        ? string.Empty
+                        : Loc.Instance[
+                            "Optimizer.UI.State.Applied.Summary",
+                            record.ChangedCount,
+                            record.CountOf(ChangeKind.Skip),
+                            record.CountOf(ChangeKind.NotApplicable),
+                            record.CountOf(ChangeKind.Refused)
+                        ];
+                }
+            )
+            .ConfigureAwait(false);
     }
 
     /// <summary>

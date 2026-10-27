@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -93,22 +93,30 @@ public class BloatwareService(
 
             apps.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
 
-            foreach (var app in apps)
-            {
-                if (string.IsNullOrWhiteSpace(app.InstallLocation))
-                    continue;
+            await Parallel
+                .ForEachAsync(
+                    apps,
+                    new ParallelOptions
+                    {
+                        MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 2, 8),
+                    },
+                    (app, _) =>
+                    {
+                        if (string.IsNullOrWhiteSpace(app.InstallLocation))
+                            return ValueTask.CompletedTask;
 
-                try
-                {
-                    var manifestLogo = ResolveLogo(app.InstallLocation);
-                    if (manifestLogo != null)
-                        app.LogoImage = manifestLogo;
-                }
-                catch
-                {
-                    /* Ignore access exceptions */
-                }
-            }
+                        try
+                        {
+                            var manifestLogo = ResolveLogo(app.InstallLocation);
+                            if (manifestLogo != null)
+                                app.LogoImage = manifestLogo;
+                        }
+                        catch { }
+
+                        return ValueTask.CompletedTask;
+                    }
+                )
+                .ConfigureAwait(false);
 
 #if DEBUG
             // Mock AppX package with unusual characters for testing warning dialog in UI

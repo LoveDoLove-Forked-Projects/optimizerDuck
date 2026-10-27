@@ -28,28 +28,48 @@ public class CustomizeRegistry
     /// </summary>
     public bool IsPreloaded { get; private set; }
 
+    private readonly Lock _preloadLock = new();
+    private Task? _preloadTask;
+
     /// <summary>
     ///     Ensures categories have been discovered before the customize UI binds.
     ///     Concurrent callers share a single discovery; a failed discovery is retried.
     /// </summary>
-    public async Task EnsurePreloadedAsync()
+    public Task EnsurePreloadedAsync()
     {
         if (IsPreloaded)
-            return;
+            return Task.CompletedTask;
 
-        _preloadTask ??= PreloadCategoriesAsync();
-        try
+        Task task;
+        lock (_preloadLock)
         {
-            await _preloadTask.ConfigureAwait(false);
+            if (IsPreloaded)
+                return Task.CompletedTask;
+            _preloadTask ??= PreloadCategoriesAsync();
+            task = _preloadTask;
         }
-        finally
+
+        return AwaitPreloadAsync(task);
+
+        async Task AwaitPreloadAsync(Task t)
         {
-            if (!IsPreloaded)
-                _preloadTask = null;
+            try
+            {
+                await t.ConfigureAwait(false);
+            }
+            finally
+            {
+                if (!IsPreloaded)
+                {
+                    lock (_preloadLock)
+                    {
+                        if (!IsPreloaded && ReferenceEquals(_preloadTask, t))
+                            _preloadTask = null;
+                    }
+                }
+            }
         }
     }
-
-    private Task? _preloadTask;
 
     /// <summary>Discovers the customize categories and their settings by reflection.</summary>
     public async Task PreloadCategoriesAsync()

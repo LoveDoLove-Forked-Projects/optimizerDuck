@@ -125,7 +125,16 @@ public partial class DashboardViewModel : ViewModel
         if (IsLoading)
             return;
 
-        await LoadSystemInfoAsync();
+        if (SystemInfo != null && SystemInfo.Cpu != CpuInfo.Unknown)
+        {
+            RuntimeMemory = _systemInfoService.GetLiveMemory();
+            RuntimeStorage = _systemInfoService.GetLiveStorage();
+        }
+        else
+        {
+            await LoadSystemInfoAsync();
+        }
+
         _updateTimer.Start();
     }
 
